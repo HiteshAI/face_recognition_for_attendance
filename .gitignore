@@ -1,1 +1,3 @@
 virtualenv/
+*.avi
+*.mp4
