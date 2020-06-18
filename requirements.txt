@@ -1,4 +1,8 @@
 cmake
-sudo pip install -v --install-option="--no" --install-option="DLIB_USE_CUDA" dlib
-pip3 install face_recognition
-pip3 install opencv-python
+matplotlib~=3.2.1
+numpy~=1.18.5
+opencv-python~=4.2.0.34
+mtcnn~=0.1.0
+Keras~=2.3.1
+Pillow~=7.1.2
+ipython~=7.15.0

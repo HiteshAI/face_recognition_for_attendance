@@ -99,6 +99,38 @@ def get_faces_cropped_from_prediction(detector, path):
 
     return cropped_faces_array_list, face_location, dict
 
+def get_faces_cropped_from_prediction_video(detector, img):
+    required_size = (160, 160)
+    # img_file_lst = os.listdir(predict_dir)
+    cropped_faces_array_list = []
+    face_location = []
+    # img = plt.imread(path)
+
+
+    # detect faces in the image
+    face = detector.detect_faces(img)
+    if not face:
+        pass
+    for face in face:
+        if face['confidence'] > 0.90:
+            bbox = face['box']
+            x1, y1, width, height = bbox
+            x2, y2 = x1 + width, y1 + height
+            cropped_face = img[y1:y2, x1:x2]
+            plt.imshow(cropped_face)
+            cropped_face_array = Image.fromarray(cropped_face)
+            cropped_face_array = cropped_face_array.resize(required_size)
+            cropped_face_array = asarray(cropped_face_array)
+            cropped_faces_array_list.append(cropped_face_array)
+            face_location.append(face)
+
+    dict = {
+        "face_location": face_location,
+        "cropped_faces_array_list": cropped_faces_array_list
+    }
+
+    return cropped_faces_array_list, face_location, dict
+
 def get_embedding(model, cropped_face_list):
 
     embeddibgs = []
@@ -142,8 +174,6 @@ def load_input_feature_embedding():
         data = pickle.load(fp)
     return data
 
-
-
 def face_matching_from_image(img_path, predict_embedding, data, face_array_and_loc, tolerance):
     img = plt.imread(img_path)
     img_name = os.path.basename(img_path)
@@ -168,9 +198,9 @@ def face_matching_from_image(img_path, predict_embedding, data, face_array_and_l
     plt.show()
     cv2.imwrite('./output_dir/'+ img_name, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
-def face_matching_from_video(img_path, predict_embedding, data, face_array_and_loc, tolerance):
-    img = plt.imread(img_path)
-    img_name = os.path.basename(img_path)
+def face_matching_from_video(img, predict_embedding, data, face_array_and_loc, tolerance):
+    # img = plt.imread(img_path)
+    # img_name = os.path.basename(img_path)
     for idx1, emb in enumerate(predict_embedding):
             name = 'Unknown'
             matches = []
@@ -187,43 +217,53 @@ def face_matching_from_video(img_path, predict_embedding, data, face_array_and_l
             x, y, width, height  = face_array_and_loc['face_location'][idx1]['box']
             image = cv2.rectangle(img, (x, y), (x + width, y + height), (255, 36, 12), 1)
             cv2.putText(image, name, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 36, 12), 1)
-
+    return img
     # plt.imshow(image)
     # plt.show()
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    output_movie = cv2.VideoWriter('output_now.avi', fourcc, 29.97, (640, 360))
-    output_movie.write(img)
+    # fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    # output_movie = cv2.VideoWriter('output_now.avi', fourcc, 29.97, (640, 360))
+    # output_movie.write(img)
     # cv2.imwrite('./output_dir_now_video/'+ img_name, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
 def get_video_frame_recognition():
+    import numpy as np
+    import cv2
 
-    input_movie = cv2.VideoCapture("videoplayback.mp4")
-    length = int(input_movie.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap = cv2.VideoCapture('videoplayback.mp4')
 
-    # Create an output movie file (make sure resolution/frame rate matches input video!)
-    # fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    # output_movie = cv2.VideoWriter('output.avi', fourcc, 29.97, (640, 360))
-    frame_number = 0
-    while frame_number < 2500:
-        # Grab a single frame of video
-        ret, frame = input_movie.read()
-        frame_number += 1
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480))
 
-        # Quit when the input video file ends
-        if not ret:
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if ret == True:
+            # frame = cv2.flip(frame, 0)
+            predict_face_array_list, face_location, face_array_and_loc = get_faces_cropped_from_prediction_video(
+                detector, frame)
+            data = load_input_feature_embedding()
+            predict_embedding = get_embedding(model, predict_face_array_list)
+            frame_matched = face_matching_from_video(frame, predict_embedding, data, face_array_and_loc, tolerance=10)
+            print("Video saved")
+
+            # write the flipped frame
+            out.write(frame_matched)
+
+            # cv2.imshow('frame', frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        else:
             break
 
-        # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
-        img = frame[:, :, ::-1]
-        # plt.imshow(img)
-        cv2.imwrite("./output_dir_video/"+str(frame_number)+ ".jpeg", img)
-
+    # Release everything if job is finished
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
 
 
 
 if __name__ == '__main__':
 
-    
     model = load_model('model/facenet_keras.h5')
     detector = MTCNN()
     data = load_input_feature_embedding()
@@ -255,14 +295,14 @@ if __name__ == '__main__':
 
     elif select == 'video':
         # Get frames from video and save to directory
-        # get_video_frame_recognition()
-        predict_dir = './output_dir_video'
-        # lsorted = sorted(l, key=lambda x: int(os.path.splitext(x)[0]))
-        for img_file in (os.listdir(predict_dir)):
-            img_path = predict_dir + '/' + img_file
-            print(img_path)
-            predict_face_array_list, face_location, face_array_and_loc = get_faces_cropped_from_prediction(detector, img_path)
-            data = load_input_feature_embedding()
-            predict_embedding = get_embedding(model, predict_face_array_list)
-            face_matching_from_video(img_path, predict_embedding, data, face_array_and_loc, tolerance=10)
-            print("Video saved")
+        get_video_frame_recognition()
+        # predict_dir = './output_dir_video'
+        # # lsorted = sorted(l, key=lambda x: int(os.path.splitext(x)[0]))
+        # for img_file in (os.listdir(predict_dir)):
+        #     img_path = predict_dir + '/' + img_file
+        #     print(img_path)
+        #     predict_face_array_list, face_location, face_array_and_loc = get_faces_cropped_from_prediction_video(detector, img)
+        #     data = load_input_feature_embedding()
+        #     predict_embedding = get_embedding(model, predict_face_array_list)
+        #     face_matching_from_video(img_path, predict_embedding, data, face_array_and_loc, tolerance=10)
+        #     print("Video saved")
